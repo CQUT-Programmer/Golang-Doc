@@ -2,8 +2,8 @@
 
 **维护版本：**
 
+- go1.27，首次发布：2026-08-19，最后更新：go1.27.0 (2026-08-19)
 - go1.26，首次发布：2026-02-10，最后更新：go1.26.0 (2026-02-10)
-- go1.25，首次发布：2025-08-12，最后更新：go1.25.6 (2026-02-10)
 
 Go 语言官方更新日志：[Release History - The Go Programming Language](https://go.dev/doc/devel/release)
 
@@ -18,6 +18,70 @@ Go2.0 上一次提出草案是在 2018 年 11 月 19 日，那时还是处于 go
 此页面只是对官方日志的一个简单搬运，不定期更新，想获取最新消息还请前往官网。
 
 :::
+
+## 1.27
+
+首次发布：2026-08-19
+
+最后更新：go1.27.0 (2026-08-19)
+
+go1.27 版本的详细更新日志可以前往[Go 1.27 Release Notes](https://go.dev/doc/go1.27)查看，在其维护期间发布的所有补丁版本可以前往[Go1.27 - Release Patch](https://go.dev/doc/devel/release#go1.27.0)了解。
+
+**语言层面**
+
+1. 方法现在可以声明自己的类型参数（泛型方法），但接口方法除外。这样就不需要再为不同的元素类型重复定义几乎相同的方法了，例如 `math/rand/v2` 中的 `(*Rand) N[Int intType](n Int) Int`。
+2. 结构体字面量的键现在可以是任意的字段选择器（field selector），而不仅仅是顶层字段名。
+3. 函数类型的推断被推广到了所有将泛型函数赋值或转换为匹配函数类型的场景。
+
+**工具链**
+
+1. `compile`、`link`、`asm`、`cgo`、`cover` 和 `pack` 等工具现在支持响应文件（`@file`），格式与 GCC 兼容。
+2. `go test` 现在默认运行 `stdversion` 检查，用于报告使用了比 `go.mod` 中声明的 Go 版本更新的标准库符号，避免使用超出目标版本的 API。
+3. `go test -json` 的输出在 `"Action":"output"` 行中新增 `OutputType` 字段，区分 `error`、`error-continue` 和 `frame` 三种类型。
+4. `go doc` 现在支持 `package@version` 语法（如 `go doc example.com/pkg@v1.2.3`），并通过 `-ex` 标志列出可执行示例，如 `go doc bytes.ExampleBuffer` 会打印出示例的源码和注释。
+5. `go fix` 新增 `atomictypes`、`embedlit`、`slicesbackward`、`unsafefuncs` 四个现代化修复程序，移除了 `fmtappendf` 分析器，并将 `waitgroup` 分析器重命名为 `waitgroupgo`。
+6. `go mod tidy` 对于 `go 1.27` 及以上的模块，会自动合并重复的 `require` 块，保持至多两个 `require` 块（直接依赖和间接依赖）的结构，并保留合并过程中的注释。
+7. `go tool trace -http` 现在当只提供端口号时（如 `-http=:6060`），只会监听 localhost；要监听所有地址需显式指定 `-http=0.0.0.0:6060`。
+8. 移除了 `bzr` 版本控制系统的支持。
+
+**运行时**
+
+1. 编译器会为内存分配生成按大小特化的分配例程，小对象（小于 80 字节）的分配开销最多降低 30%，在分配密集型的程序中整体性能约提升 1%；代价是二进制大小增加约 60KB，可通过 `GOEXPERIMENT=nosizespecializedmalloc` 关闭。
+2. 全新的 `goroutineleak` profile 正式可用（此前在 1.26 中为实验性质），可通过 `runtime/pprof` 或 `net/http/pprof` 的 `/debug/pprof/goroutineleak` 端点使用，用于检测被并发原语阻塞且无法从任何可运行 goroutine 到达的 goroutine。
+3. 对于 `go 1.27` 及以上的模块，panic 的 traceback 首行现在会包含 `runtime/pprof` 中设置的 goroutine 标签，可通过 `GODEBUG=tracebacklabels=0` 关闭。
+4. 自 1.23 引入的 `GODEBUG=asynctimerchan` 被彻底移除，`time` 包创建的 channel 现在永远是同步（无缓冲）的。
+
+**编译器与链接器**
+
+1. 编译器在解析 `//line` 或 `/*line*/` 指令中的相对文件名时，会以包含该指令的文件所在目录作为基准。
+2. 编译器为函数字面量（闭包）生成更简单且一致的名称，不受内联的影响；完全相同的字面量现在可能共享同一份代码，因此检查符号名称的测试可能需要更新。
+3. macOS 上的链接器现在接受 `-macos` 和 `-macsdk` 选项，用于指定写入 `LC_BUILD_VERSION` 的操作系统和 SDK 版本。
+
+**标准库**
+
+1. `encoding/json/v2` 正式加入标准库（自 1.25 起以实验库形式存在）：API 与 v1 相似，函数（`Marshal`、`Unmarshal` 等）支持可变参数的 `Options`，默认行为更严格，会拒绝无效的 UTF-8 和重复的 JSON 对象名；标签选项 `inline` 被重命名为 `embed`。同时，v1 的 `encoding/json` 现在也由 v2 实现支撑（可通过 `GOEXPERIMENT=nojsonv2` 关闭），行为保持不变，但错误信息可能有所不同。
+2. 新增 `crypto/mldsa` 包：实现了后量子抗量子计算的 ML-DSA 签名方案（FIPS 204）。
+3. 新增 `uuid` 包：用于生成和解析 UUID。
+4. `crypto/tls`：支持在 TLS 1.3 中使用 ML-DSA 签名（`MLDSA44`、`MLDSA65`、`MLDSA87`）和 `MLKEM1024` 密钥交换；`ConnectionState` 新增 `LocalCertificate` 字段；`Config.Rand` 被标记为弃用。
+5. `crypto/x509`：支持 ML-DSA 密钥和签名；在 Windows 和 macOS 上，`SystemCertPool` 现在会尊重 `SSL_CERT_FILE` 和 `SSL_CERT_DIR` 环境变量。
+6. `net/http`：`Transport` 和 `Server` 支持用户提供的 `net.Conn` 上的 TLS ALPN 协商；HTTP/2 服务器接受客户端优先级信号（RFC 9218）；HTTP/1 的 `Response.Body` 在关闭时会自动排空未读内容，以便更好地复用连接。
+7. `unicode` 数据从 Unicode 15 升级到 Unicode 17。
+8. `strings` 和 `bytes` 新增 `CutLast` 函数，按最后一个出现的分隔符进行切分。
+9. `testing/synctest` 新增 `Sleep` 帮助函数，结合了 `time.Sleep` 和 `synctest.Wait` 的行为。
+10. `math/big` 的 `Int` 类型新增 `Divide` 方法，支持 `Trunc`、`Floor`、`Round`、`Ceil` 四种舍入模式。
+11. `go/types` 新增 `Hasher` 和 `HasherIgnoreTags` 类型，实现了 `maphash.Hasher` 接口；`GODEBUG=gotypesalias` 被彻底移除，`go/types` 现在始终产生 `Alias` 类型节点。
+
+**平台兼容性**
+
+1. macOS：现在要求 macOS 13 Ventura 或更高版本，不再支持更低的版本（Go 1.26 是支持 macOS 12 的最后一个版本）。
+2. Linux ppc64 大端：现在生成 ELFv2 ABI 的二进制文件，要求内核 3.13 或更高（或 RHEL7 的 3.10 回溯移植版本）。
+
+**废弃与移除**
+
+1. `crypto/tls.Config.Rand` 被标记为弃用，测试中应使用 `testing/cryptotest.SetGlobalRandom` 替代。
+2. 彻底移除的 GODEBUG 设置：`asynctimerchan`、`gotypesalias`、`tlsunsafeekm`、`tlsrsakex`、`tls3des`、`tls10server`、`x509keypairleaf`、`tlskyber`。
+3. 彻底移除的 GOEXPERIMENT：`goroutineleakprofile`（已由正式可用的 `goroutineleak` profile 取代）。
+4. `go.mod` 中设置已被移除的 GODEBUG 为旧值时，`go` 命令现在会直接报错；设置为其移除前的最终默认值则被接受。
 
 ## 1.26
 
@@ -83,9 +147,9 @@ go1.25 版本的详细更新日志可以前往[Go 1.25 Release Notes](https://go
 
 1. 新增`test/synctest`，用于测试并发代码
 2. 新增实验库`encoding/json/v2`，包含了:
-    - `encoding/json/v2`
-      ，反序列化速度较于v1提升2-10倍左右，基准测试见[go-json-experiment/jsonbench](https://github.com/go-json-experiment/jsonbench)
-    - `encoding/json/jsontext`，提供了与json字符串低级交互的能力
+   - `encoding/json/v2`
+     ，反序列化速度较于v1提升2-10倍左右，基准测试见[go-json-experiment/jsonbench](https://github.com/go-json-experiment/jsonbench)
+   - `encoding/json/jsontext`，提供了与json字符串低级交互的能力
 
 **工具链**
 
@@ -98,33 +162,26 @@ go1.25 版本的详细更新日志可以前往[Go 1.25 Release Notes](https://go
 **运行时**
 
 1. GOMAXPROCS在容器环境中会感知容器CPU限制
-
 2. 新版实验GC`greenteagc`，GC的基本调度单位从object变成了memoery span
-
 3. 当panic未捕获时，不再重复打印
-
    ```
    panic: PANIC [recovered]
      panic: PANIC
    ```
-
    变为
-
    ```
    panic: PANIC [recovered, repanicked]
    ```
-
 4. 新增 `runtime/trace.FlightRecorder`，能够以更轻量的方式持续捕获运行时执行信息
 
 **编译器**
 
 1. 修复了1.21空指针延迟检查（延迟到错误检查以后）的bug，下面这个一眼有问题的代码，在1.25版本以前能够正常运行
-
    ```go
    package main
-   
+
    import "os"
-   
+
    func main() {
    	f, err := os.Open("nonExistentFile")
    	name := f.Name()
@@ -135,9 +192,7 @@ go1.25 版本的详细更新日志可以前往[Go 1.25 Release Notes](https://go
    	println(name)
    }
    ```
-
 2. 编译器会对位于栈上的slice预留更多后备内存，以提高使用性能
-
 3. 支持生成DWARF5调试信息
 
 ## 1.24
@@ -152,12 +207,11 @@ go1.24 版本的详细更新日志可以前往[Go 1.24 Release Notes](https://go
 **语言层面**
 
 1. 泛型类型别名，允许为泛型类型创建别名，这在引用第三方定义的泛型类型时非常有用，例如
-
    ```go
    import (
        "other"
    )
-   
+
    type MyQuque[T any] = other.Queue[T]
    ```
 
@@ -223,7 +277,6 @@ go1.23 版本的详细更新日志可以前往[Go 1.23 Release Notes](https://go
 **语言层面**
 
 1. for range 支持迭代器函数，详细信息查看[Go Wiki: Rangefunc Experiment](https://go.dev/wiki/RangefuncExperiment)。
-
    ```go
    func Upper(s []string) iter.Seq2[int, string] {
      return func(yield func(int, string) bool) {
@@ -235,31 +288,26 @@ go1.23 版本的详细更新日志可以前往[Go 1.23 Release Notes](https://go
        return
      }
    }
-   
+
    func main() {
      sl := []string{"hello", "world", "golang"}
      for i, s := range Upper(sl) {
        fmt.Printf("%d : %s\n", i, s)
      }
    }
-   
+
    //0 : HELLO
    //1 : WORLD
    //2 : GOLANG
    ```
-
    这是一个比较实用的特性，一般会结合泛型来用。
 
 **标准库**
 
 1. 新增标准库`iter`，它定义和描述了关于迭代器的详细信息
-
 2. `maps`库新增了若干个迭代器函数
-
 3. `slices`库新增了若干个迭代器函数
-
 4. 新增`structs`库，提供了可以修改结构体属性的能力，比如内存布局
-
    ```go
    type Person struct {
      Name string
@@ -267,24 +315,20 @@ go1.23 版本的详细更新日志可以前往[Go 1.23 Release Notes](https://go
      _    structs.HostLayout
    }
    ```
-
 5. 优化了`time`标准库的实现
 
 **Linker**
 
 1. 处理`//go:linkname`的滥用，对于一些经常被引用的 API 暂时允许其存在，比如`runtime.memhash64`，`runtime.nanotime`等等，此后对于其他的新引用将不会允许。
-
    ```go
    //go:linkname gcinit runtime.gcinit
    func gcinit()
-   
+
    func main() {
      gcinit()
    }
    ```
-
    像这种代码就无法通过编译
-
    ```
    link: main: invalid reference to runtime.gcinit
    ```
@@ -304,7 +348,6 @@ go1.22 版本的详细更新日志可以前往[Go 1.22 Release Notes](https://go
 **语言层面**
 
 1. 解决了 go 语言循环变量的问题
-
    ```go
    func main() {
      var wg sync.WaitGroup
@@ -319,11 +362,8 @@ go1.22 版本的详细更新日志可以前往[Go 1.22 Release Notes](https://go
      wg.Wait()
    }
    ```
-
    这段代码在 1.22 前，会输出 10 个 9，在 1.22 后则会正常输出 0 到 9。
-
 2. `for range`现在支持迭代数字类型，如下
-
    ```go
    for i := range 10 {
      fmt.Println(i)
@@ -333,18 +373,14 @@ go1.22 版本的详细更新日志可以前往[Go 1.22 Release Notes](https://go
 **标准库**
 
 1. 增强了`net/http`标准库的路由
-
 2. `database/sql`新增了`sql.Null`泛型类型
-
    ```go
    type Null[T any] struct {
      V     T
      Valid bool
    }
    ```
-
    使用如下
-
    ```go
    type Person struct {
      Name sql.Null[string]
@@ -365,16 +401,12 @@ go1.21 版本的详细更新日志可以前往[Go 1.21 Release Notes](https://go
 1. 新增了两个内置函数`min` ，`max`，用于计算最大值最小值。
 2. 新增内置函数`clear`，用于清空 map 和 slice
 3. 更新了`package`初始化顺序
-
    - 按导入路径对所有包进行排序
    - 重复执行，直到包的列表为空
    - 找到列表中所有的导入都已被初始化的第一个包
    - 初始化该包并将其从列表中删除
-
 4. 提高和改进了类型推理的能力和精度，主要是泛型相关。
-
 5. 推出了`for range`循环变量改进的预览版本，这是一个困扰了 Go 开发者接近十年的问题，官方终于要解决了，详情见：[LoopvarExperiment · golang/go Wiki (github.com)](https://github.com/golang/go/wiki/LoopvarExperiment)和[Proposal: Less Error-Prone Loop Variable Scoping (googlesource.com)](https://go.googlesource.com/proposal/+/master/design/60078-loopvar.md)
-
 6. 保证了`recover`的返回值不会是`nil`，如果在调用`panic`时参数为`nil`，则会触发另一个`panic`，返回`*runtime.PanicNilError`。为了兼容性，在编译时设置`GODEBUG=panicnil=1`允许向`panic`传入`nil`。
 
 **标准库**
@@ -436,11 +468,8 @@ go1.19 版本的详细更新日志可以前往[Go 1.19 Release Notes](https://go
 **重要变化**
 
 1. 内存模型向 c/c++看齐，类似于 TcMollcate
-
 2. `sync/atomic`包现在提供了更多的类型可供使用
-
 3. 支持使用`runtime/debug.SetMemoryLimit`函数对 go 内存进行软限制，在某些情况下可以提供内存利用效率
-
 4. 运行时现在会根据协程栈的平均使用情况来选择一个合适的大小为其初始化栈空间内存，这样可以避免频繁的栈扩容缩容
 
 ## 1.18
@@ -504,15 +533,11 @@ go1.15 版本的详细更新日志可以前往[Go 1.15 Release Notes](https://go
 该版本没什么重要的语法上的变更，一些重要的变化如下
 
 1. 优化了小对象的分配效率
-
 2. 新增了包`time/tzdata`，通过下面的方式支持将时区数据库嵌入到程序中，因为有很多系统本地并没有时区数据信息。
-
    ```go
    improt _ "time/tzdata"
    ```
-
 3. 对 go 链接器做出了重大改进，减少了其资源使用，并提高了代码的健壮性
-
 4. 在某些情况下，允许`unsafe.Pointer`转换为`uinptr`
 
 ## 1.14
@@ -526,7 +551,6 @@ go1.14 版本的详细更新日志可以前往[Go 1.14 Release Notes](https://go
 **语言层面**
 
 1. 支持方法集接口类型嵌套
-
    ```go
    type MyIO interface {
      io.WriteCloser
@@ -549,19 +573,15 @@ go1.13 版本的详细更新日志可以前往[Go 1.13 Release Notes](https://go
 **语言层面**
 
 1. 支持更现代的数字字面量，比如
-
    ```go
    0b101 // 二进制
    0o10 // 十进制
    0x1B // 十六进制
    ```
-
    支持下划线分割数字以带来更好的可读性
-
    ```go
    10_000
    ```
-
    虚数`i`的后缀现在可以是任何的二进制，十进制，十六进制，或浮点数数字
 
 **其它**
@@ -650,7 +670,6 @@ go1.8 版本的详细更新日志可以前往[Go 1.8 Release Notes](https://go.d
 **语言层面**
 
 1. 当两个结构体进行类型转换时，会忽略结构体 tag 的不同
-
    ```go
    func example() {
        type T1 struct {
@@ -713,14 +732,13 @@ go1.5 版本的详细更新日志可以前往[Go 1.5 Release Notes](https://go.d
 **语言层面**
 
 1. 在初始化 map 字面量的键时，允许省略元素类型
-
    ```go
    m := map[Point]string{
        Point{29.935523, 52.891566}:   "Persepolis",
        Point{-25.352594, 131.034361}: "Uluru",
        Point{37.422455, -122.084306}: "Googleplex",
    }
-   
+
    // 省略类型
    m := map[Point]string{
        {29.935523, 52.891566}:   "Persepolis",
@@ -748,22 +766,18 @@ go1.4 版本的详细更新日志可以前往[Go 1.4 Release Notes](https://go.d
 **语言层面**
 
 1. `for range`循环可以一个迭代参数，比如
-
    ```
    for i := range x {
        ...
    }
    ```
-
    但是不能一个都没有
-
 2. 在调用双重引用类型的方法时，不再自动解引用
-
    ```go
    type T int
    func (T) M() {}
    var x **T
-   
+
    // 不被允许
    x.M()
    ```
@@ -801,9 +815,7 @@ go1.2 版本的详细更新日志可以前往[Go 1.2 Release Notes](https://go.d
 **语言层面**
 
 1. 对值为`nil`的变量进行操作会引发`panic`
-
 2. 在对切片进行分隔时，可以使用第三个参数来限制被分割的切片容量从而更安全的使用切片
-
    ```go
    var array [10]int
    slice := array[2:4:4]
@@ -812,9 +824,7 @@ go1.2 版本的详细更新日志可以前往[Go 1.2 Release Notes](https://go.d
 **其它**
 
 1. 协程栈的最小内存大小由 4KB 提升到了 8KB
-
 2. 将最大线程数限制在了 10000
-
 3. 长时间运行的协程在发生函数调用时会被抢占（协作式抢占的首次引入）
 
 ## 1.1
@@ -851,11 +861,8 @@ go1.0 版本的详细更新日志可以前往[Go 1.0 Release Notes](https://go.d
 相较于预览版而言，语法上多了以下这些东西
 
 1. 新增内置`append`函数，用于给切片添加元素
-
 2. 新增内置`close`函数，用于关闭管道
-
 3. 复合语义，在初始化切片，map，结构体字面量元素时，可以省略其类型，如下所示
-
    ```go
    // 声明类型
    holiday1 := []Date{
@@ -871,27 +878,18 @@ go1.0 版本的详细更新日志可以前往[Go 1.0 Release Notes](https://go.d
        {"Dec", 25},
    }
    ```
-
 4. 在`init`函数中使用的协程会直接启动，不需要再等待所有的包都初始化完毕。
-
 5. 新增`rune`类型，表示一个 UTF-8 字符
-
 6. 新增`error`内置接口，表示错误类型
-
 7. 新增`delete`内置函数用于删除 map 中的键值对
-
 8. 使用`for range`迭代 map 的顺序变得不可预测
-
 9. 支持同时给多个变量赋值
-
    ```
    a := 1
    b := 2
    a, b = 3, 4
    ```
-
 10. 变量隐藏问题：当函数的有具名返回值时，如果有任何返回值被隐藏了，则`return`语句必须携带返回值，否则编译不通过，下面是一个错误示例
-
     ```go
     func Bug() (i, j, k int) {
         for i = 0; i < 5; i++ {
@@ -905,9 +903,7 @@ go1.0 版本的详细更新日志可以前往[Go 1.0 Release Notes](https://go.d
         return // OK: j is not shadowed here.
     }
     ```
-
 11. 允许复制带有私有字段的结构体值
-
 12. 在结构体和切片都是可比较元素组成的情况下，允许它们作为 map 的键，同时移除了函数和 map 的可比较性
 
 除了语言层面之外，go1.0 在包的组织方式和标准库以及命令行方面相较于预览版本都有着非常大的改变，由于内容太多这里不再过多赘述，感兴趣可以自己去官网了解。
